@@ -1,0 +1,260 @@
+
+
+using Core.Models.ProductModels;
+using Core_Web_API.Models;
+using Core_Web_API.Models.ProductModels;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PagedList;
+using PagedList.Mvc;
+using CartReference = Core_Web_API.Models.ProductModels.CartReference;
+using PlacedOrders = Core_Web_API.Models.ProductModels.PlacedOrders;
+using Product = Core_Web_API.Models.ProductModels.Product;
+
+namespace Core_Web_API.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class CustomerController : Controller
+    {
+        private readonly ApplicationContext _context;
+        
+        public CustomerController(ApplicationContext context)
+        {
+            _context = context;
+        }
+        //[HttpGet("index")]
+        //public async Task<IActionResult> Index(string sortOrder, string currentFilter, string searchString, int? page)
+        //{
+        //    ViewBag.CurrentSort = sortOrder;
+        //    ViewBag.NameSortParm = String.IsNullOrEmpty(sortOrder) ? "name_desc" : "";
+        //    ViewBag.DescriptionSortParm = sortOrder == "Description" ? "descrip_desc" : "Description";
+        //    ViewBag.PriceSortParm = sortOrder == "Price" ? "price_desc" : "Price";
+        //    ViewBag.QuantitySortParm = sortOrder == "Quantity" ? "quantity_desc" : "Quantity";
+
+        //    if (searchString != null)
+        //    {
+        //        page = 1;
+        //    }
+        //    else
+        //    {
+        //        searchString = currentFilter;
+        //    }
+        //    ViewBag.CurrentFilter = searchString;
+        //    var products = await _context.Products.ToListAsync();
+        //    if (!String.IsNullOrEmpty(searchString))
+        //    {
+        //        products = (List<Core.Models.ProductModels.Product>)products.Where(s => s.Name.Contains(searchString));
+        //        if (products.Count() == 0)
+        //        {
+        //            products = (List<Core.Models.ProductModels.Product>)products.Where(s => s.Description.Contains(searchString));
+        //        }
+
+        //        if (products.Count() == 0)
+        //        {
+        //            products = (List<Core.Models.ProductModels.Product>)products.Where(s => s.Price.ToString() == searchString);
+        //        }
+        //        if (products.Count() == 0)
+        //        {
+        //            products = (List<Core.Models.ProductModels.Product>)products.Where(s => s.Quantity.ToString() == searchString);
+        //        }
+        //    }
+        //    switch (sortOrder)
+        //    {
+        //        case "name_desc":
+        //            products = (List<Core.Models.ProductModels.Product>)products.OrderByDescending(s => s.Name);
+        //            break;
+        //        case "Description":
+        //            products = (List<Core.Models.ProductModels.Product>)products.OrderBy(s => s.Description);
+        //            break;
+        //        case "descrip_desc":
+        //            products = (List<Core.Models.ProductModels.Product>)products.OrderByDescending(s => s.Description);
+        //            break;
+        //        case "Quantity":
+        //            products = (List<Core.Models.ProductModels.Product>)products.OrderBy(s => s.Quantity);
+        //            break;
+        //        case "quantity_desc":
+        //            products = (List<Core.Models.ProductModels.Product>)products.OrderByDescending(s => s.Quantity);
+        //            break;
+        //        case "Price":
+        //            products = (List<Core.Models.ProductModels.Product>)products.OrderBy(s => s.Price);
+        //            break;
+        //        case "price_desc":
+        //            products = (List<Core.Models.ProductModels.Product>)products.OrderByDescending(s => s.Price);
+        //            break;
+
+        //        default:
+        //            products = (List<Core.Models.ProductModels.Product>)products.OrderBy(s => s.Name);
+        //            break;
+        //    }
+        //    int pageSize = 3;
+        //    int pageNumber = (page ?? 1);
+        //    return View(products.ToPagedList(pageNumber, pageSize));
+        //}
+
+        [HttpGet("index")]
+        public async Task<IActionResult> Index()
+        {
+            return Ok(_context.Products != null ?
+                        await _context.Products.ToListAsync() :
+                        Problem("Entity set 'ApplicationContext.Products'  is null."));
+        }
+
+        [HttpGet("getbyid")]
+        public async Task<IActionResult> GetById(int? id)
+        {
+            Product p = new Product();
+            if (id != null)
+            {
+                Product product = await _context.Products.Where(x => x.Id == id).FirstOrDefaultAsync();
+                if (product != null)
+                {
+                    p = product;
+                    return Ok(p);
+                }
+            }
+            return BadRequest(p);
+        }
+
+        [HttpPost("addtocart")]
+        public async Task<IActionResult> AddToCart(string id, Product product)
+        {
+            if(product != null)
+            {
+                CartReference c = await _context.Carts.Where(x => x.CartDRefId == id && x.ProductRefId == product.Id).FirstOrDefaultAsync();
+                if (c != null)
+                {
+                    Product pro = _context.Products.Where(x => x.Id == product.Id).FirstOrDefault();
+                    if (pro.Quantity > 0)
+                    {
+                        c.ProductQuantity++;
+                        await _context.SaveChangesAsync();
+                        pro.Quantity--;
+                        if(pro.Quantity == 0)
+                        {
+                            _context.Products.Remove(pro);
+                        }
+                        await _context.SaveChangesAsync();
+                        return Ok(c);
+                    }
+                }
+                else if (c == null)
+                {
+                    CartReference cartReference = new CartReference();
+                    cartReference.CartDRefId = id;
+                    cartReference.ProductName = product.Name;
+                    cartReference.ProductRefId = product.Id;
+                    cartReference.ProductImage = product.ProductImage;
+                    cartReference.ProductPrice = product.Price;
+                    cartReference.ProductDescription = product.Description;
+                    cartReference.ProductQuantity = 1;
+
+                    _context.Carts.Add(cartReference);
+                    await _context.SaveChangesAsync();
+                    Product p = await _context.Products.Where(x => x.Id == product.Id).FirstOrDefaultAsync();
+                    p.Quantity--;
+                    await _context.SaveChangesAsync();
+                    return Ok(cartReference);
+                }
+            }
+            return BadRequest();
+        }
+
+        [HttpGet("cart")]
+        public async Task<IActionResult> Cart(string id)
+        {
+            if(id != null)
+            {
+                List<CartReference> list = await _context.Carts.Where(x => x.CartDRefId == id).ToListAsync();
+                return Ok(list);
+            }
+            else
+            {
+                return BadRequest();
+            }
+        }
+
+        [HttpGet("quantchange")]
+        public async Task<IActionResult> QuantChange(int pId, string cId, int op)
+        {
+            if(pId!=null && cId!=null && op!=null)
+            {
+                int productId = pId;
+                string cartId = cId;
+                CartReference c = await _context.Carts.Where(x => x.CartDRefId == cartId && x.ProductRefId == productId).FirstOrDefaultAsync();
+                Product p = await _context.Products.Where(x => x.Id ==productId).FirstOrDefaultAsync();
+                if (p == null)
+                {
+                    Product pro = new Product();
+                    pro.Id = productId;
+                    pro.Name = c.ProductName;
+                    pro.Description = c.ProductDescription;
+                    pro.ProductImage = c.ProductImage;
+                    pro.Price = c.ProductPrice;
+                    pro.Quantity = 0; 
+                    _context.Products.Add(pro);
+                    p = pro;
+                }
+                if (p.Quantity > 0 && op==1)
+                {
+                    c.ProductQuantity++;
+                    p.Quantity--;
+                }
+                else if(c.ProductQuantity > 0 && op==0)
+                {
+                    c.ProductQuantity--;
+                    p.Quantity++;
+                }
+                if (c.ProductQuantity == 0)
+                {
+                    _context.Carts.Remove(c);
+                }
+                if (p.Quantity == 0)
+                {
+                    _context.Products.Remove(p);
+                }
+                await _context.SaveChangesAsync();
+                return Ok(c);
+            }
+            return BadRequest();
+        }
+
+        [HttpGet("checkout")]
+        public async Task<IActionResult> CheckOut(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+            {
+                return BadRequest(string.Empty);
+            }
+            string userId = id;
+            List<CartReference> cart = new List<CartReference>();
+            cart.AddRange(_context.Carts.Where(x => x.CartDRefId == userId));
+
+            int ordernum = 1;
+            if (_context.Orders.Any(x => x.CartDRefId == userId))
+            {
+                int check = _context.Orders.Where(x => x.CartDRefId == userId).Count();
+                ordernum = check + 1;
+            }
+            foreach (CartReference c in cart)
+            {
+                PlacedOrders p = new PlacedOrders
+                {
+                    CartDRefId = c.CartDRefId,
+                    ProductDescription = c.ProductDescription,
+                    ProductImage = c.ProductImage,
+                    ProductName = c.ProductName,
+                    ProductPrice = c.ProductPrice,
+                    ProductQuantity = c.ProductQuantity,
+                    ProductRefId = c.ProductRefId,
+                    OrderNumber = ordernum,
+                };
+                _context.Orders.Add(p);
+                _context.Carts.Remove(c);
+            }
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+    }
+}
