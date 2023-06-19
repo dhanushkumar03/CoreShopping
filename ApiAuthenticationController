@@ -1,0 +1,49 @@
+using Core_Web_API.Models;
+using Core_Web_API.Repository;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Core_Web_API.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class AuthenticationController : ControllerBase
+    {
+        private readonly IAccountRepository _accountRepository;
+        public AuthenticationController(IAccountRepository accountRepository)
+        {
+            _accountRepository = accountRepository;
+        }
+        [HttpPost("login")]
+        public async Task<IActionResult> Login(UserModel user)
+        {
+            var result = await _accountRepository.Login(user);
+            if(result != null)
+            {
+                if (result.IsSuccess)
+                {
+                    return Ok(result);
+                }
+                return Unauthorized();
+            }
+            return NotFound();
+        }
+        [HttpPost("signup")]
+        public async Task<IActionResult> SignUp(SignUpTemp user)
+        {
+            if(ModelState.IsValid)
+            {
+                var result = await _accountRepository.SignUp(user);
+                if(result != null)
+                {
+                    if(result.IsSuccess)
+                    {
+                        return Ok(user);
+                    }
+                    return BadRequest();
+                }
+                return BadRequest();
+            }
+            return BadRequest();
+        }
+    }
+}
