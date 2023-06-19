@@ -1,0 +1,80 @@
+[HttpGet]
+        public async Task<IActionResult> Index(string sortOrder, string currentFilter, string searchString, int? page)
+        {
+            ViewBag.CurrentSort = sortOrder;
+            ViewBag.NameSortParm = String.IsNullOrEmpty(sortOrder) ? "name_desc" : "";
+            ViewBag.DescriptionSortParm = sortOrder == "Description" ? "descrip_desc" : "Description";
+            ViewBag.PriceSortParm = sortOrder == "Price" ? "price_desc" : "Price";
+            ViewBag.QuantitySortParm = sortOrder == "Quantity" ? "quantity_desc" : "Quantity";
+
+            if (searchString != null)
+            {
+                page = 1;
+            }
+            else
+            {
+                searchString = currentFilter;
+            }
+            ViewBag.CurrentFilter = searchString;
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri("https://localhost:7246/");
+                var getTask = await client.GetAsync("api/Admin/index");
+                if (getTask.IsSuccessStatusCode)
+                {
+                    var userjsonString = getTask.Content.ReadAsStringAsync();
+                    var de = Newtonsoft.Json.JsonConvert.DeserializeObject<IEnumerable<Product>>(userjsonString.Result);
+
+
+                    var products = de;
+                    if (!String.IsNullOrEmpty(searchString))
+                    {
+                        products = products.Where(s => s.Name.Contains(searchString));
+                        if (products.Count() == 0)
+                        {
+                            products = products.Where(s => s.Description.Contains(searchString));
+                        }
+                        if (products.Count() == 0)
+                        {
+                            products = products.Where(s => s.Price.ToString() == searchString);
+                        }
+                        if (products.Count() == 0)
+                        {
+                            products = products.Where(s => s.Quantity.ToString() == searchString);
+                        }
+                    }
+                    switch (sortOrder)
+                    {
+                        case "name_desc":
+                            products = products.OrderByDescending(s => s.Name);
+                            break;
+                        case "Description":
+                            products = products.OrderBy(s => s.Description);
+                            break;
+                        case "descrip_desc":
+                            products = products.OrderByDescending(s => s.Description);
+                            break;
+                        case "Quantity":
+                            products = products.OrderBy(s => s.Quantity);
+                            break;
+                        case "quantity_desc":
+                            products = products.OrderByDescending(s => s.Quantity);
+                            break;
+                        case "Price":
+                            products = products.OrderBy(s => s.Price);
+                            break;
+                        case "price_desc":
+                            products = products.OrderByDescending(s => s.Price);
+                            break;
+
+                        default:
+                            products = products.OrderBy(s => s.Name);
+                            break;
+                    }
+                    int pageSize = 2;
+                    int pageNumber = (page ?? 1);
+                    return View(products.ToPagedList(pageNumber, pageSize));
+                }
+            }
+            return View();
+        }
